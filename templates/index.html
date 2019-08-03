@@ -7,5 +7,15 @@
   <input type="file" name="uploadfile" />
   <input type="submit" value="upload" />
 </form>
+<table>
+  <tr>
+    <th>filename</th>
+    <th>image</th>
+  </tr>
+  <tr>
+    <td>{{.FileName}}</td>
+    <td><img src="{{.FilePath}}"></td>
+  </tr>
+</table>
 </body>
 </html>
