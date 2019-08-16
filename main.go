@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -27,34 +29,25 @@ func GetS3UploadManager() *s3manager.Uploader {
 	return s3manager.NewUploader(sess)
 }
 
-func IndexHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl := template.Must(template.ParseFiles("templates/index.html"))
-	tmpl.Execute(w, "")
-}
-
-func UploadToS3(file io.Reader, fileName string) error {
+func UploadToS3(file io.Reader, fileName string) (*s3manager.UploadOutput, error) {
 	bucket := "odmishienbucket"
 	uploader := GetS3UploadManager()
-	_, err := uploader.Upload(&s3manager.UploadInput{
+	output, err := uploader.Upload(&s3manager.UploadInput{
+		ACL:    aws.String("public-read"),
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileName),
 		Body:   file,
 	})
 	if err != nil {
 		log.Fatal("upload s3: ", err)
-		return err
+		return nil, err
 	}
-	return nil
+	return output, nil
 }
 
-func MakeTempFile(file io.Reader, fileName string) error {
-	f, err := os.OpenFile("imgs/"+fileName, os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	io.Copy(f, file)
-	return nil
+func IndexHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	tmpl.Execute(w, "")
 }
 
 func UploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,12 +74,12 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	defer file.Close()
 
-	err = MakeTempFile(file, handler.Filename)
+	fb, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Fatal(err)
 	}
-	tf, err := os.Open("imgs/" + handler.Filename)
-	err = UploadToS3(tf, handler.Filename)
+	buf := bytes.NewBuffer(fb)
+	output, err := UploadToS3(buf, handler.Filename)
 
 	if err != nil {
 		log.Fatal(err)
@@ -95,7 +88,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles("templates/index.html"))
 	img := Image{
 		FileName: handler.Filename,
-		FilePath: "/imgs/" + handler.Filename}
+		FilePath: output.Location}
 
 	tmpl.Execute(w, img)
 }
